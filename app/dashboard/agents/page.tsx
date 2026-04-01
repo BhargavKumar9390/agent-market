@@ -1,7 +1,7 @@
 "use client";
 
-import { Card, Button, Chip, Separator, Spinner } from "@heroui/react";
-import React, { useEffect, useState } from "react";
+import { Card, Button, Chip, Spinner } from "@heroui/react";
+import React, { useEffect, useState, useRef } from "react";
 import { UserAgent } from "@/types/agent";
 import { createClient } from "@/utils/supabase/client";
 
@@ -10,9 +10,25 @@ export default function AgentsPage() {
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
+  // Chat Modal State
+  const [isOpen, setIsOpen] = useState(false);
+  const onOpen = () => setIsOpen(true);
+  const onClose = () => setIsOpen(false);
+  const [activeAgent, setActiveAgent] = useState<UserAgent | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState("");
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "agent"; text: string }[]>([]);
+  const [userInput, setUserInput] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     fetchAgents();
   }, []);
+
+  useEffect(() => {
+    // Scroll to bottom when history changes
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatHistory]);
 
   const fetchAgents = async () => {
     try {
@@ -23,7 +39,7 @@ export default function AgentsPage() {
       }
 
       const { data, error } = await supabase
-        .from("user_agents")
+        .from("adk_agents")
         .select("*")
         .eq("user_id", user.id);
       
@@ -33,6 +49,84 @@ export default function AgentsPage() {
       console.error("Failed to fetch agents:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRun = (agent: UserAgent) => {
+    setActiveAgent(agent);
+    setChatHistory([]);
+    // Using simple random ID (can be uuid or same as user_id for start as per user request)
+    const sessionId = `session-${Math.random().toString(36).substring(2, 11)}`;
+    setCurrentSessionId(sessionId);
+    onOpen();
+  };
+
+  const sendMessage = async () => {
+    if (!userInput.trim() || !activeAgent || isStreaming) return;
+
+    const messageText = userInput;
+    setUserInput("");
+    setChatHistory(prev => [...prev, { role: "user", text: messageText }]);
+    setIsStreaming(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const backendUrl = process.env.NEXT_PUBLIC_ADK_BACKEND_URL || "http://localhost:8000";
+      
+      const response = await fetch(`${backendUrl}/api/run-agent/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agent_name: activeAgent.name,
+          user_message: messageText,
+          session_id: currentSessionId,
+          user_id: user?.id || "anonymous-user"
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to reach backend");
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let currentAgentMessage = "";
+
+      if (reader) {
+        setChatHistory(prev => [...prev, { role: "agent", text: "" }]);
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                
+                if (data.type === "partial" || data.type === "final") {
+                  currentAgentMessage += data.text;
+                  setChatHistory(prev => {
+                    const newHistory = [...prev];
+                    if (newHistory.length > 0) {
+                      newHistory[newHistory.length - 1].text = currentAgentMessage;
+                    }
+                    return newHistory;
+                  });
+                }
+              } catch (e) {
+                // Ignore incomplete JSON chunks from split lines
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      setChatHistory(prev => [...prev, { role: "agent", text: "Sorry, I encountered an error connecting to the backend." }]);
+    } finally {
+      setIsStreaming(false);
     }
   };
 
@@ -98,6 +192,7 @@ export default function AgentsPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <Button size="sm" variant="ghost" className="border-divider" onClick={() => handleRun(agent)}>Run</Button>
                     <Button size="sm" variant="secondary">View Logs</Button>
                     <Button size="sm" variant="primary">Configure</Button>
                   </div>
@@ -105,6 +200,77 @@ export default function AgentsPage() {
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Chat Modal Overlay */}
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-background border border-divider rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-divider">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary font-bold text-lg">
+                  {activeAgent?.name.charAt(0)}
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-bold text-default-900">Run Agent: {activeAgent?.name}</span>
+                  <span className="text-[10px] text-default-400 font-mono">SID: {currentSessionId}</span>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={onClose} className="min-w-0 p-2">✕</Button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-grow overflow-y-auto p-6 space-y-4 min-h-[300px]">
+              {chatHistory.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-default-400 gap-3 py-12">
+                  <div className="w-12 h-12 bg-divider/30 rounded-full flex items-center justify-center text-2xl">💬</div>
+                  <p>Start a conversation with your agent.</p>
+                </div>
+              ) : (
+                chatHistory.map((chat, i) => (
+                  <div key={i} className={`flex ${chat.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[85%] p-4 rounded-2xl ${chat.role === "user" ? "bg-primary text-white rounded-tr-none shadow-md" : "bg-divider/30 text-default-900 rounded-tl-none border border-divider/50"}`}>
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{chat.text}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+              {isStreaming && (
+                <div className="flex justify-start">
+                  <div className="bg-divider/30 p-4 rounded-2xl rounded-tl-none border border-divider/50 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></span>
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-divider bg-background/50">
+              <div className="flex w-full gap-2 items-center">
+                <input
+                  className="flex-grow bg-divider/20 border border-divider/50 rounded-xl px-4 py-3 text-sm outline-none focus:border-primary/50 transition-colors disabled:opacity-50"
+                  placeholder="Type your message..."
+                  value={userInput}
+                  onChange={(e) => setUserInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !isStreaming && sendMessage()}
+                  disabled={isStreaming}
+                />
+                <Button 
+                  variant="primary"
+                  className="h-11 px-6 shadow-lg shadow-primary/20"
+                  isDisabled={isStreaming || !userInput.trim()}
+                  onClick={sendMessage}
+                >
+                  {isStreaming ? <Spinner size="sm" color="current" /> : "Send"}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

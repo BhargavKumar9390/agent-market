@@ -19,7 +19,7 @@ export default function MarketplacePage() {
   const fetchTemplates = async () => {
     try {
       const { data, error } = await supabase
-        .from("agent_templates")
+        .from("adk_agent_templates")
         .select("*");
       
       if (error) throw error;
@@ -40,21 +40,63 @@ export default function MarketplacePage() {
         alert("Please log in to deploy agents.");
         return;
       }
-      const { error: insertError } = await supabase
-        .from("user_agents")
-        .insert({
-          user_id: user.id,
-          template_id: template.id,
-          name: template.name,
-          config: {},
-          status: "inactive"
+
+      // 1. Call Backend to Build the Agent
+      const backendUrl = process.env.NEXT_PUBLIC_ADK_BACKEND_URL || "http://localhost:8000";
+      let response = await fetch(`${backendUrl}/api/build-agent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          agent_name: template.name,
+          instructions: template.instructions,
+          mcp_sse_endpoints: template.mcp_sse_endpoints,
+        }),
+      });
+
+      // Handle Conflict (409): Delete and Retry
+      if (response.status === 409) {
+        console.log(`Agent ${template.name} already exists on backend. Deleting and retrying...`);
+        await fetch(`${backendUrl}/api/agents/${encodeURIComponent(template.name)}`, {
+          method: "DELETE",
         });
+        
+        // Retry build
+        response = await fetch(`${backendUrl}/api/build-agent`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            agent_name: template.name,
+            instructions: template.instructions,
+            mcp_sse_endpoints: template.mcp_sse_endpoints,
+          }),
+        });
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail?.message || errorData.detail || "Failed to initialize agent on backend.");
+      }
+
+      // 2. Synchronize with Supabase (Upsert on name conflict)
+      const { error: upsertError } = await supabase
+        .from("adk_agents")
+        .upsert({
+          user_id: user.id,
+          name: template.name,
+          instructions: template.instructions,
+          mcp_sse_endpoints: template.mcp_sse_endpoints,
+          status: "inactive"
+        }, { onConflict: 'name' });
       
-      if (insertError) throw insertError;
+      if (upsertError) throw upsertError;
       alert(`Successfully deployed ${template.name}! Check your agents dashboard.`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Deployment error:", error);
-      alert("An unexpected error occurred during deployment.");
+      alert(error.message || "An unexpected error occurred during deployment.");
     } finally {
       setDeploying(null);
     }

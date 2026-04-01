@@ -13,7 +13,7 @@ import {
 } from "@heroui/react";
 import NextLink from "next/link";
 import clsx from "clsx";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 import { siteConfig } from "@/config/site";
@@ -31,6 +31,7 @@ export const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const router = useRouter();
+  const pathname = usePathname();
   const supabase = createClient();
 
   useEffect(() => {
@@ -96,7 +97,9 @@ export const Navbar = () => {
                 </NextLink>
               </li>
             )}
-            {siteConfig.navItems.map((item) => (
+            {siteConfig.navItems
+              .filter((item) => !(pathname?.startsWith("/login") && item.href === "/"))
+              .map((item) => (
               <li key={item.href}>
                 <NextLink
                   className={clsx(

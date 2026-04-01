@@ -26,7 +26,7 @@ export default function DashboardPage() {
       }
 
       const { data, error } = await supabase
-        .from("user_agents")
+        .from("adk_agents")
         .select("*")
         .eq("user_id", user.id);
       
