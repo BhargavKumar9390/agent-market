@@ -1,10 +1,10 @@
-import { NextRequest } from 'next/server'
+// Use the standard Web `Request` type for Next app route handlers
 import Sandbox from 'e2b'
 import { Client } from '@modelcontextprotocol/sdk/client'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 
-export async function GET(request: NextRequest, { params }: { params: { agent: string } }) {
-  const { agent } = params
+export async function GET(request: Request, { params }: any) {
+  const { agent } = params as { agent: string }
 
   if (!process.env.E2B_API_KEY) {
     return new Response(JSON.stringify({ error: 'E2B_API_KEY is not configured' }), { status: 500 })
