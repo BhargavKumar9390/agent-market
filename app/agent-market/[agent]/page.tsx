@@ -5,9 +5,7 @@ import Link from 'next/link'
 import { AgentPanels, AGENTS } from '../ui'
 import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 
-interface Props { params: { agent: string } }
-
-export default function AgentDetailPage({ params }: Props) {
+export default function AgentDetailPage({ params }: { params: { agent: string } }) {
     const { agent } = params
 
     const panel = (AgentPanels as any)[agent]
