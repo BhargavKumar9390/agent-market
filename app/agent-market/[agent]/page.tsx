@@ -14,7 +14,7 @@ export default function AgentDetailPage({ params }: { params: { agent: string } 
             <DashboardLayout>
                 <main className="max-w-4xl mx-auto p-6">
                     <h1 className="text-2xl font-bold">Agent not found</h1>
-                    <p className="mt-3 text-sm text-muted-foreground">The agent "{agent}" is not available. Available agents: {AGENTS.map(a=>a.id).join(', ')}</p>
+                    <p className="mt-3 text-sm text-muted-foreground">The agent &quot;{agent}&quot; is not available. Available agents: {AGENTS.map(a => a.id).join(', ')}</p>
                 </main>
             </DashboardLayout>
         )
