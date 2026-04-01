@@ -3,39 +3,13 @@
 import { useState } from "react";
 
 const SEVERITY = {
-  CRITICAL: {
-    label: "CRITICAL",
-    color: "var(--severity-critical)",
-    bg: "var(--severity-bg-critical)",
-  },
-  HIGH: {
-    label: "HIGH",
-    color: "var(--severity-high)",
-    bg: "var(--severity-bg-high)",
-  },
-  MEDIUM: {
-    label: "MEDIUM",
-    color: "var(--severity-medium)",
-    bg: "var(--severity-bg-medium)",
-  },
-  LOW: {
-    label: "LOW",
-    color: "var(--severity-low)",
-    bg: "var(--severity-bg-low)",
-  },
-  INFO: {
-    label: "INFO",
-    color: "var(--severity-info)",
-    bg: "var(--severity-bg-info)",
-  },
-  PASS: {
-    label: "PASS",
-    color: "var(--severity-pass)",
-    bg: "var(--severity-bg-pass)",
-  },
+  CRITICAL: { label: "CRITICAL", color: "#ef4444", bg: "#2a0808" },
+  HIGH: { label: "HIGH", color: "#f97316", bg: "#1f1008" },
+  MEDIUM: { label: "MEDIUM", color: "#eab308", bg: "#1a1500" },
+  LOW: { label: "LOW", color: "#22d3ee", bg: "#001a1f" },
+  INFO: { label: "INFO", color: "#6b7280", bg: "#111113" },
+  PASS: { label: "PASS", color: "#22c55e", bg: "#0a1a0f" },
 } as const;
-
-type SeverityKey = keyof typeof SEVERITY;
 
 export default function MCPSecurityScanner({
   serverUrl = "",
@@ -87,14 +61,14 @@ export default function MCPSecurityScanner({
 
   const scoreColor =
     clampedScore === null
-      ? "var(--muted)"
+      ? "#6b7280"
       : clampedScore >= 80
-        ? "var(--tool-green)"
+        ? "#22c55e"
         : clampedScore >= 50
-          ? "var(--severity-medium)"
+          ? "#eab308"
           : clampedScore >= 25
-            ? "var(--tool-orange)"
-            : "var(--tool-red)";
+            ? "#f97316"
+            : "#ef4444";
 
   const scoreLabel =
     clampedScore === null
@@ -125,7 +99,7 @@ export default function MCPSecurityScanner({
               style={{
                 ...S.scoreBadge,
                 color: scoreColor,
-                borderColor: `color-mix(in oklab, ${scoreColor} 35%, transparent)`,
+                borderColor: scoreColor + "44",
               }}
             >
               <span style={S.scoreNum}>{clampedScore}</span>
@@ -194,7 +168,7 @@ export default function MCPSecurityScanner({
                   style={{
                     ...S.summaryChip,
                     background: s.bg,
-                    borderColor: `color-mix(in oklab, ${s.color} 30%, transparent)`,
+                    borderColor: s.color + "44",
                   }}
                 >
                   <span style={{ color: s.color, fontWeight: 700 }}>
@@ -212,16 +186,15 @@ export default function MCPSecurityScanner({
 
           <div style={S.findings}>
             {results.findings.map((f: any, i: number) => {
-              const sev = f.severity as SeverityKey;
               const s =
-                sev in SEVERITY ? SEVERITY[sev] : SEVERITY.INFO;
+                SEVERITY[f.severity as keyof typeof SEVERITY] || SEVERITY.INFO;
               return (
                 <div
                   key={i}
                   style={{
                     ...S.finding,
                     background: s.bg,
-                    borderColor: `color-mix(in oklab, ${s.color} 22%, transparent)`,
+                    borderColor: s.color + "33",
                   }}
                 >
                   <div style={S.findingHeader}>
@@ -229,7 +202,7 @@ export default function MCPSecurityScanner({
                       style={{
                         ...S.sevBadge,
                         color: s.color,
-                        borderColor: `color-mix(in oklab, ${s.color} 38%, transparent)`,
+                        borderColor: s.color + "55",
                       }}
                     >
                       {f.severity}
@@ -239,12 +212,7 @@ export default function MCPSecurityScanner({
                   </div>
                   <div style={S.findingDesc}>{f.description}</div>
                   {f.evidence && (
-                    <pre
-                      style={{
-                        ...S.evidence,
-                        borderColor: `color-mix(in oklab, ${s.color} 15%, transparent)`,
-                      }}
-                    >
+                    <pre style={{ ...S.evidence, borderColor: s.color + "22" }}>
                       {f.evidence}
                     </pre>
                   )}
@@ -270,14 +238,14 @@ export default function MCPSecurityScanner({
 }
 
 const C = {
-  bg: "var(--tool-bg)",
-  surface: "var(--tool-surface)",
-  border: "var(--tool-border)",
-  text: "var(--foreground)",
-  muted: "var(--muted)",
-  accent: "var(--accent)",
-  red: "var(--tool-red)",
-  green: "var(--tool-green)",
+  bg: "#0d0d0f",
+  surface: "#141416",
+  border: "#1e1e22",
+  text: "#e8e8f0",
+  muted: "#5a5a6e",
+  accent: "#7c6af7",
+  red: "#ef4444",
+  green: "#22c55e",
 };
 
 const S: any = {
@@ -338,8 +306,8 @@ const S: any = {
     outline: "none",
   },
   scanBtn: (disabled: boolean) => ({
-    background: disabled ? "var(--default)" : "var(--accent)",
-    color: disabled ? C.muted : "var(--accent-foreground)",
+    background: disabled ? "#1e1e28" : "#ef4444",
+    color: disabled ? C.muted : "#fff",
     border: "none",
     borderRadius: 6,
     padding: "8px 20px",
@@ -352,8 +320,8 @@ const S: any = {
   }),
   scanningText: { animation: "pulse 1s infinite" },
   errorBanner: {
-    background: "var(--tool-error-bg)",
-    borderTop: `1px solid color-mix(in oklab, ${C.red} 30%, transparent)`,
+    background: "#2a0f0f",
+    borderTop: `1px solid ${C.red}44`,
     color: C.red,
     padding: "8px 20px",
     fontSize: 12,
@@ -361,14 +329,14 @@ const S: any = {
   progressWrap: { padding: "16px 20px" },
   progressBar: {
     height: 3,
-    background: "var(--default)",
+    background: "#1e1e22",
     borderRadius: 2,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
     width: "60%",
-    background: "var(--accent)",
+    background: "#7c6af7",
     borderRadius: 2,
     animation: "progress 1.5s ease-in-out infinite",
   },
@@ -407,14 +375,14 @@ const S: any = {
   },
   findingTitle: { fontWeight: 600, fontSize: 13, flex: 1 },
   findingCheck: { fontSize: 10, color: C.muted, fontStyle: "italic" },
-  findingDesc: { fontSize: 12, color: "var(--muted)", lineHeight: 1.6 },
+  findingDesc: { fontSize: 12, color: "#aaa", lineHeight: 1.6 },
   evidence: {
-    background: "var(--tool-code-bg)",
+    background: "#08080c",
     border: "1px solid",
     borderRadius: 5,
     padding: "8px 12px",
     fontSize: 11,
-    color: "var(--tool-orange)",
+    color: "#f97316",
     margin: 0,
     fontFamily: "inherit",
     overflowX: "auto",
@@ -427,7 +395,7 @@ const S: any = {
     gap: 8,
     alignItems: "flex-start",
     fontSize: 11,
-    color: "var(--tool-green)",
+    color: "#22c55e",
     lineHeight: 1.5,
   },
   recIcon: { flexShrink: 0 },
