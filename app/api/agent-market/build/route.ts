@@ -43,11 +43,11 @@ function buildAgentPy(name: string, description: string, instructions: string, m
   const safeName = name.toLowerCase().replace(/[^a-z0-9_]/g, "_");
   const toolsBlock = mcpUrls.length > 0
     ? mcpUrls
-        .map(
-          (url) =>
-            `        McpToolset(\n            connection_params=StreamableHTTPConnectionParams(\n                url="${url}",\n            ),\n        )`
-        )
-        .join(",\n")
+      .map(
+        (url) =>
+          `        McpToolset(\n            connection_params=StreamableHTTPConnectionParams(\n                url="${url}",\n            ),\n        )`
+      )
+      .join(",\n")
     : `        McpToolset(\n            connection_params=StreamableHTTPConnectionParams(\n                url="https://example.com/mcp",\n            ),\n        )`;
 
   return `from google.adk.agents.llm_agent import Agent
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
 
     const serverGithubToken = process.env.GITHUB_TOKEN ?? "";
     const token = userToken || serverGithubToken;
-    
+
     if (!token || token.trim() === "" || token === "dasdsa") {
       return NextResponse.json(
         { error: "A valid GitHub Personal Access Token is required." },
@@ -110,18 +110,19 @@ export async function POST(req: Request) {
     }
 
     // Sanitize repo name
-    const repoName = `${name.toLowerCase().replace(/[^a-z0-9-]/g, "-")}-agent`;
+    const safeName = name.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    const repoName = `${safeName}-agent`;
     const mcpUrlsArray: string[] = mcp_urls || [];
 
     // --- Step 1: Generate repo from template ---
     console.log(`Generating from template ${TEMPLATE_OWNER}/${TEMPLATE_REPO} for ${github_username}...`);
     await githubFetch(`/repos/${TEMPLATE_OWNER}/${TEMPLATE_REPO}/generate`, token, {
       method: "POST",
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         owner: github_username,
-        name: repoName, 
+        name: repoName,
         description: description || `My custom ${name} agent`,
-        private: false 
+        private: false
       }),
     });
 
@@ -166,9 +167,47 @@ export async function POST(req: Request) {
 
     console.log("agent.py pushed — GitHub Actions will now deploy to Cloud Run");
 
+    // --- Step 4.5: Update deploy.yml ---
+    const deployFilePath = ".github/workflows/deploy.yml";
+    let deployFileSha = "";
+    let deployFileContent = "";
+    try {
+      const deployData = await githubFetch(
+        `/repos/${github_username}/${repoName}/contents/${deployFilePath}`,
+        token
+      );
+      deployFileSha = deployData.sha;
+      deployFileContent = Buffer.from(deployData.content, "base64").toString("utf-8");
+    } catch (err: any) {
+      console.log("deploy.yml not found or could not be read:", err.message);
+    }
+
+    if (deployFileSha && deployFileContent) {
+      console.log("Updating deploy.yml...");
+      const updatedDeployContent = deployFileContent.replace(
+        /service:\s*capital-agent-service-git/,
+        `service: ${safeName}`
+      );
+      const encodedDeployContent = Buffer.from(updatedDeployContent).toString("base64");
+
+      await githubFetch(
+        `/repos/${github_username}/${repoName}/contents/${deployFilePath}`,
+        token,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            message: `Configure deploy.yml for agent: ${name}`,
+            content: encodedDeployContent,
+            sha: deployFileSha,
+          }),
+        }
+      );
+      console.log("deploy.yml pushed");
+    }
+
     // --- Step 5: Save to Supabase ---
     // Derive expected Cloud Run URL from deploy.yml service name convention
-    const cloudRunUrl = `https://agent-template-service-${name.toLowerCase().replace(/[^a-z0-9]/g, "-")}.run.app`;
+    const cloudRunUrl = `https://${safeName}-475756125529.us-central1.run.app`;
 
     const { error: upsertError } = await supabase
       .from("adk_agents")
