@@ -26,28 +26,6 @@ import { createClient } from "@/utils/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { SidebarCollapse } from "./sidebar-collapse";
 
-function UserCircleIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden
-    >
-      <path
-        d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function LogOutIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -311,21 +289,6 @@ export const SidebarWrapper = () => {
                   aria-label="Account"
                   className="min-w-[220px] gap-0 rounded-2xl p-1.5"
                 >
-                  <Dropdown.Item
-                    key="view-profile"
-                    className="cursor-pointer rounded-xl py-2.5 pl-2 pr-3 data-[hovered=true]:bg-default"
-                    onPress={() => {
-                      router.push("/dashboard/settings");
-                      closeMobileSidebar();
-                    }}
-                  >
-                    <span className="flex items-center gap-3">
-                      <UserCircleIcon className="shrink-0 text-default-600" />
-                      <span className="text-sm font-medium text-default-900">
-                        View Profile
-                      </span>
-                    </span>
-                  </Dropdown.Item>
                   <Dropdown.Item
                     key="settings"
                     className="cursor-pointer rounded-xl py-2.5 pl-2 pr-3 data-[hovered=true]:bg-default"

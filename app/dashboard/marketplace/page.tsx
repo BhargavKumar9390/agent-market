@@ -20,11 +20,11 @@ function StepBar({ current }: { current: number }) {
             <div className="flex flex-col items-center gap-1">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${done
-                  ? "bg-primary text-white"
-                  : active
-                    ? "bg-primary/20 border-2 border-primary text-primary"
-                    : "bg-default-100 text-default-400"
-                  }`}
+                                  ? "bg-primary text-primary-foreground"
+                                  : active
+                                    ? "bg-primary/20 border-2 border-primary text-primary"
+                                    : "bg-default-100 text-default-400"
+                                  }`}
               >
                 {done ? "✓" : i + 1}
               </div>
@@ -538,7 +538,7 @@ export default function MarketplacePage() {
                               className={`mt-0.5 w-4 h-4 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${selected ? "bg-primary border-primary" : "border-default-400"
                                 }`}
                             >
-                              {selected && <span className="text-[10px] text-white font-bold">✓</span>}
+                              {selected && <span className="text-[10px] text-primary-foreground font-bold">✓</span>}
                             </div>
                             <div className="flex flex-col min-w-0">
                               <span className="text-sm font-bold truncate">{preset.name}</span>

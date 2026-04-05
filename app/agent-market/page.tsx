@@ -130,7 +130,7 @@ export default function AgentMarketPage() {
 
                                     <div className="flex gap-2 pt-1 mt-auto">
                                         <Button 
-                                            className="flex-1 bg-default-900 text-white font-bold h-10 shadow-lg shadow-default-200/20 group/btn hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                                            className="flex-1 bg-primary text-primary-foreground font-bold h-10 shadow-lg shadow-primary/20 group/btn hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                                             onClick={() => handleConnect(mcp)}
                                         >
                                             Connect

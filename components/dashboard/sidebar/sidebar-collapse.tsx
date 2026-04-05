@@ -64,12 +64,12 @@ export const SidebarCollapse = ({
           <Popover.Trigger
             aria-label={`${title} menu`}
             className={clsx(
-              "flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl text-default-600 outline-none transition-colors hover:bg-[var(--sidebar-item-hover)]",
+              "flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl text-default-600 outline-none transition-colors hover:bg-[var(--sidebar-item-hover)]",
               hasActiveChild &&
                 "bg-[var(--sidebar-item-active)] text-[var(--sidebar-fg-active)] [&_.text-default-500]:text-[var(--sidebar-fg-active)]",
             )}
           >
-            <span className="flex items-center justify-center text-inherit [&_svg]:size-5">
+            <span className="flex items-center justify-center text-inherit [&_svg]:size-4">
               {icon}
             </span>
           </Popover.Trigger>
@@ -104,11 +104,11 @@ export const SidebarCollapse = ({
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={clsx(
-          "flex w-full cursor-pointer items-center gap-3.5 rounded-xl px-2.5 py-1.5 transition-all duration-150 outline-none select-none",
+          "flex w-full cursor-pointer items-center gap-3 rounded-xl px-2.5 py-1 transition-all duration-150 outline-none select-none",
           isOpen ? "text-default-900" : "text-default-600 hover:bg-[var(--sidebar-item-hover)]"
         )}
       >
-        <span className="flex shrink-0 items-center justify-center [&_svg]:size-5 text-default-500">
+        <span className="flex shrink-0 items-center justify-center [&_svg]:size-4 text-default-500">
           {icon}
         </span>
         <span className="flex-1 text-left font-medium text-sm">

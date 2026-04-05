@@ -252,7 +252,7 @@ export default function AgentsPage() {
                     className={`flex ${chat.role === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[85%] p-4 rounded-2xl ${chat.role === "user" ? "bg-primary text-white rounded-tr-none shadow-md" : "bg-divider/30 text-default-900 rounded-tl-none border border-divider/50"}`}
+                      className={`max-w-[85%] p-4 rounded-2xl ${chat.role === "user" ? "bg-primary text-primary-foreground rounded-tr-none shadow-md" : "bg-divider/30 text-default-900 rounded-tl-none border border-divider/50"}`}
                     >
                       <p className="text-sm leading-relaxed whitespace-pre-wrap">
                         {chat.text}
