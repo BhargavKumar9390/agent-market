@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { createClient as createServerClient } from "@/utils/supabase/server";
 import LoginClient from "./LoginClient";
 
@@ -11,5 +12,9 @@ export default async function LoginPage() {
     // ignore errors; fall through to render login
   }
 
-  return <LoginClient />;
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+      <LoginClient />
+    </Suspense>
+  );
 }
