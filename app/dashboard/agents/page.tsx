@@ -5,15 +5,26 @@ import React, { useEffect, useState, useRef } from "react";
 import { UserAgent } from "@/types/agent";
 import { createClient } from "@/utils/supabase/client";
 
+// ADK /run returns Event[]. Extract the last model text response.
+function extractReply(events: any[]): string {
+  const modelEvents = events.filter(
+    (e) => e.content?.role === "model" && e.content?.parts?.length > 0
+  );
+  if (modelEvents.length === 0) return JSON.stringify(events);
+  const last = modelEvents[modelEvents.length - 1];
+  return last.content.parts
+    .map((p: any) => p.text ?? "")
+    .join("")
+    .trim();
+}
+
 export default function AgentsPage() {
-  const [agents, setAgents] = useState<UserAgent[]>([]);
+  const [agents, setAgents] = useState<(UserAgent & { checkingHealth?: boolean })[]>([]);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
-  // Chat Modal State
+  // Chat modal state
   const [isOpen, setIsOpen] = useState(false);
-  const onOpen = () => setIsOpen(true);
-  const onClose = () => setIsOpen(false);
   const [activeAgent, setActiveAgent] = useState<UserAgent | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState("");
   const [chatHistory, setChatHistory] = useState<
@@ -28,7 +39,6 @@ export default function AgentsPage() {
   }, []);
 
   useEffect(() => {
-    // Scroll to bottom when history changes
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory]);
 
@@ -48,7 +58,36 @@ export default function AgentsPage() {
         .eq("user_id", user.id);
 
       if (error) throw error;
-      setAgents(data || []);
+
+      const fetchedAgents = (data || []).map((a: any) => ({
+        ...a,
+        checkingHealth: !!a.cloud_run_url
+      }));
+      setAgents(fetchedAgents);
+
+      fetchedAgents.forEach(async (agent) => {
+        if (!agent.cloud_run_url) return;
+        try {
+          const res = await fetch("/api/agent-market/health", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: agent.cloud_run_url }),
+          });
+          if (res.ok) {
+            const { status } = await res.json();
+            setAgents((prev) =>
+              prev.map((a) => (a.id === agent.id ? { ...a, status, checkingHealth: false } : a))
+            );
+            return;
+          }
+        } catch {
+          console.error("Failed to check health for agent:", agent.name);
+        }
+
+        setAgents((prev) =>
+          prev.map((a) => (a.id === agent.id ? { ...a, checkingHealth: false } : a))
+        );
+      });
     } catch (error) {
       console.error("Failed to fetch agents:", error);
     } finally {
@@ -59,16 +98,29 @@ export default function AgentsPage() {
   const handleRun = (agent: UserAgent) => {
     setActiveAgent(agent);
     setChatHistory([]);
-    // Using simple random ID (can be uuid or same as user_id for start as per user request)
-    const sessionId = `session-${Math.random().toString(36).substring(2, 11)}`;
-    setCurrentSessionId(sessionId);
-    onOpen();
+    setCurrentSessionId(
+      `session-${Math.random().toString(36).substring(2, 11)}`
+    );
+    setIsOpen(true);
   };
 
   const sendMessage = async () => {
     if (!userInput.trim() || !activeAgent || isStreaming) return;
 
-    const messageText = userInput;
+    if (!activeAgent.cloud_run_url) {
+      setChatHistory((prev) => [
+        ...prev,
+        {
+          role: "agent",
+          text: "This agent has no Cloud Run URL configured. Please deploy it first.",
+        },
+      ]);
+      return;
+    }
+
+    const messageText = userInput.trim();
+    const isFirstMessage = chatHistory.length === 0;
+
     setUserInput("");
     setChatHistory((prev) => [...prev, { role: "user", text: messageText }]);
     setIsStreaming(true);
@@ -78,22 +130,64 @@ export default function AgentsPage() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      // TODO: Implement Supabase Edge Function call here
+      const appName = "my_agent_new";
+      const userId = user?.id ?? currentSessionId;
+
+      // All ADK calls go through /api/agent/chat (server-side proxy) to avoid CORS.
+      // Cloud Run does not send Access-Control-Allow-Origin headers by default.
+
+      // Step 1: Create session before the first message
+      if (isFirstMessage) {
+        const sessionRes = await fetch("/api/agent/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "create_session",
+            cloudRunUrl: activeAgent.cloud_run_url,
+            appName,
+            userId,
+            sessionId: currentSessionId,
+          }),
+        });
+        if (!sessionRes.ok) {
+          const { error } = await sessionRes.json();
+          throw new Error(error ?? "Failed to create session");
+        }
+      }
+
+      // Step 2: Run the agent
+      const runRes = await fetch("/api/agent/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "run",
+          cloudRunUrl: activeAgent.cloud_run_url,
+          appName,
+          userId,
+          sessionId: currentSessionId,
+          message: messageText,
+        }),
+      });
+
+      if (!runRes.ok) {
+        const { error } = await runRes.json();
+        throw new Error(error ?? "Agent request failed");
+      }
+
+      const { events } = await runRes.json();
+      const agentReply = extractReply(events);
+
       setChatHistory((prev) => [
         ...prev,
-        {
-          role: "agent",
-          text: "Agent chat functionality is currently being migrated to Supabase Edge Functions.",
-        },
+        { role: "agent", text: agentReply },
       ]);
-
-    } catch (error) {
+    } catch (error: any) {
       console.error("Chat error:", error);
       setChatHistory((prev) => [
         ...prev,
         {
           role: "agent",
-          text: "Sorry, I encountered an error connecting to the backend.",
+          text: `Error: ${error?.message ?? "Could not reach the agent."}`,
         },
       ]);
     } finally {
@@ -147,59 +241,38 @@ export default function AgentsPage() {
 
                 <div className="flex flex-wrap items-center gap-6">
                   <div className="flex flex-col">
-                    <span className="text-[10px] uppercase tracking-wider text-default-400 font-bold">
+                    <span className="text-[10px] uppercase tracking-wider text-default-400 font-bold mb-1">
                       Status
                     </span>
-                    <Chip
-                      color={
-                        agent.status === "active"
-                          ? "success"
-                          : agent.status === "paused"
-                            ? "warning"
-                            : "default"
-                      }
-                      size="sm"
-                      variant="soft"
-                      className="mt-1"
-                    >
-                      {agent.status}
-                    </Chip>
+                    {agent.checkingHealth ? (
+                      <div className="w-[60px] flex items-center justify-center h-[24px]">
+                        <Spinner size="sm" />
+                      </div>
+                    ) : (
+                      <Chip
+                        color={
+                          agent.status === "active"
+                            ? "success"
+                            : agent.status === "paused"
+                              ? "warning"
+                              : "default"
+                        }
+                        size="sm"
+                        variant="soft"
+                      >
+                        {agent.status}
+                      </Chip>
+                    )}
                   </div>
 
-                  <div className="flex flex-col">
-                    <span className="text-[10px] uppercase tracking-wider text-default-400 font-bold">
-                      Accuracy
-                    </span>
-                    <span className="text-sm font-bold text-default-900">
-                      N/A
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col">
-                    <span className="text-[10px] uppercase tracking-wider text-default-400 font-bold">
-                      Tasks Run
-                    </span>
-                    <span className="text-sm font-bold text-default-900">
-                      0
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="border-divider"
-                      onClick={() => handleRun(agent)}
-                    >
-                      Run
-                    </Button>
-                    <Button size="sm" variant="secondary">
-                      View Logs
-                    </Button>
-                    <Button size="sm" variant="primary">
-                      Configure
-                    </Button>
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="border-divider"
+                    onClick={() => handleRun(agent)}
+                  >
+                    Run
+                  </Button>
                 </div>
               </div>
             </Card>
@@ -207,11 +280,11 @@ export default function AgentsPage() {
         </div>
       )}
 
-      {/* Chat Modal Overlay */}
+      {/* Chat Modal */}
       {isOpen && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-background border border-divider rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
+            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-divider">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary font-bold text-lg">
@@ -221,22 +294,22 @@ export default function AgentsPage() {
                   <span className="font-bold text-default-900">
                     {activeAgent?.name}
                   </span>
-                  <span className="text-[10px] text-default-400 font-mono">
-                    SID: {currentSessionId}
+                  <span className="text-[10px] text-default-400 font-mono truncate max-w-[280px]">
+                    {activeAgent?.cloud_run_url ?? "No URL configured"}
                   </span>
                 </div>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={onClose}
+                onClick={() => setIsOpen(false)}
                 className="min-w-0 p-2"
               >
                 ✕
               </Button>
             </div>
 
-            {/* Modal Body */}
+            {/* Messages */}
             <div className="flex-grow overflow-y-auto p-6 space-y-4 min-h-[300px]">
               {chatHistory.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-default-400 gap-3 py-12">
@@ -252,7 +325,10 @@ export default function AgentsPage() {
                     className={`flex ${chat.role === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[85%] p-4 rounded-2xl ${chat.role === "user" ? "bg-primary text-primary-foreground rounded-tr-none shadow-md" : "bg-divider/30 text-default-900 rounded-tl-none border border-divider/50"}`}
+                      className={`max-w-[85%] p-4 rounded-2xl ${chat.role === "user"
+                        ? "bg-primary text-white rounded-tr-none shadow-md"
+                        : "bg-divider/30 text-default-900 rounded-tl-none border border-divider/50"
+                        }`}
                     >
                       <p className="text-sm leading-relaxed whitespace-pre-wrap">
                         {chat.text}
@@ -264,16 +340,16 @@ export default function AgentsPage() {
               {isStreaming && (
                 <div className="flex justify-start">
                   <div className="bg-divider/30 p-4 rounded-2xl rounded-tl-none border border-divider/50 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></span>
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]" />
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]" />
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" />
                   </div>
                 </div>
               )}
               <div ref={chatEndRef} />
             </div>
 
-            {/* Modal Footer */}
+            {/* Input */}
             <div className="p-4 border-t border-divider bg-background/50">
               <div className="flex w-full gap-2 items-center">
                 <input

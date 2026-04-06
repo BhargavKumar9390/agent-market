@@ -1,3 +1,6 @@
+export const dynamic = "force-dynamic";
+export const runtime = "edge";
+
 import { NextRequest } from "next/server";
 
 const REMOTE_AGENT = process.env.REMOTE_AGENT_URL!;
@@ -69,7 +72,26 @@ export async function POST(req: NextRequest) {
     if (isStream) {
       // Clear timeout — stream duration is unpredictable, agent controls completion
       clearTimeout(timeout);
-      return new Response(upstream.body, {
+
+      const stream = new ReadableStream({
+        async start(controller) {
+          const reader = upstream.body!.getReader();
+          try {
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              controller.enqueue(value);
+            }
+          } catch (e) {
+            controller.error(e);
+          } finally {
+            controller.close();
+            reader.releaseLock();
+          }
+        },
+      });
+
+      return new Response(stream, {
         headers: {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache, no-transform",

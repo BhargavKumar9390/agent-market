@@ -1,3 +1,6 @@
+export const dynamic = "force-dynamic";
+export const runtime = "edge";
+
 import { createClient } from "@/utils/supabase/server";
 
 export const maxDuration = 60;
